@@ -1,0 +1,468 @@
+---
+title: "US Election Vote Prediction_MSCI718"
+author: "Advait Shah"
+date: "04/04/2022"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+Q.1.:->
+
+```{r}
+
+# The first data (Q1Data1.csv) is Pew Research Center polls taken during the 2008 election campaign. We will name this dataset as "dat1".
+
+# The second data (Q1Data2.csv) is about 2008 election result in the US. We will name this dataset as "dat2"
+
+#need to use "foreign" library package for loading dataset from the file with ".dta" extension
+library(foreign)
+
+#Loading the given data file
+dat1 <- read.dta("Q1Data1.dta")
+
+#Loading the given data file
+dat2 <- read.csv("Q1Data2.csv", header = T, stringsAsFactors = F)
+
+#displaying head of loaded datasets dat1 and dat2
+head(dat1)
+head(dat2)
+
+```
+
+
+Q.1.(a)
+
+Here we need to update "dat1" dataframe, loaded from the first data file (Q1Data1.csv), as per the instructions provided in the question:
+
+```{r}
+
+#--- 1) as per instructions given in the question, subsetting the data so that we have all states but Hawaii, Alaska, and Washington D.C and have only four columns “state,” “marital,” “heat2,” and “heat4.”
+
+D1 <- subset(dat1, state != "hawaii" & state != "alaska" & state != "washington dc", select = c(state, marital,heat2,heat4), stringsAsFactors = FALSE)
+
+#--- 2) Here, If no data is available in “heat2,” we are replacing that "NA" with the corresponding value in “heat4.”
+
+#before transferring data from heat4 to heat2, first we need to create factor levels that are not existing in heat2 but existing heat4, so that it does not give any error while transferring data
+D1$heat2 <- factor(D1$heat2, levels = c(levels(D1$heat2), "3rd party/lean 3rd party (barr)", "4th party/lean 4th party (nader)"))
+
+#now, If no data is available in “heat2,” we are replacing that "NA" with the corresponding value in “heat4.”
+D1$heat2[which(is.na(D1$heat2))] <- D1$heat4[which(is.na(D1$heat2))]
+
+#Furthermore, as instructed in the question, If neither “heat2” nor “heat4” has data, we are erasing the corresponding row.
+D1 <- D1[-which(is.na(D1$heat2) & is.na(D1$heat4)),]
+
+#--- 3) Now, we need to Subset the data so that we only have “dem/lean dem” and “rep/lean rep” in the “heat2” column
+
+D1 <- subset(D1, heat2 == "dem/lean dem" | heat2 == "rep/lean rep")
+
+#--- 4) Here, we need to change the label of all the variables but ‘married’ (married people) in the “marital” column to ‘other’ (which indicates non-married people).
+
+#before that, we need to remove the row when the marital variable is missing
+D1 <- D1[-which(is.na(D1$marital)),]
+
+#also, we need to convert D1$marital column from factor to character to allow relabelling
+D1$marital <- as.character(D1$marital)
+
+#now, relabelling variable value as per above mentioned philosophy
+for(i in 1:length(D1$marital)){
+  if(D1$marital[i] != "married"){
+    D1$marital[i] = "other"
+  }
+}
+
+#now, we need to convert D1$marital column back to factor from character
+D1$marital <- as.factor(D1$marital)
+
+#also, for ease during further data analysis in Q.1(b), updating state and heat2 variables to latest factors and removing unwanted factors by converting them once into character and then back to factors
+D1$state <- as.character(D1$state)
+D1$state <- as.factor(D1$state)
+
+D1$heat2 <- as.character(D1$heat2)
+D1$heat2 <- as.factor(D1$heat2)
+
+#now, by running this code, we have our dataframe ready as requested in the question, and we will see head of it now
+head(D1)
+
+```
+
+
+###################
+
+Q.1.(b)
+
+Firstly,
+For each state, we need to first calculate following:
+1) the proportion of the democratic supporters,
+2) the proportion of the married people,
+3) the ratio of the married people among the democratic supporters to the total married people,
+4) the ratio of non-married among the democratic to the total non-married people,
+5) the difference of 3) and 4).
+
+```{r}
+
+library(dplyr)
+
+#by using below summarise function and state as grouping variable, and applying necessary formulae on above dataframe D1, we get our new dataframe D1b with new variables as asked in the question
+
+D1b <- D1 %>% 
+  group_by(state) %>%
+  summarise(prop_dem = sum(heat2 == 'dem/lean dem')/ n(),
+            prop_marr = sum(marital == 'married')/ n(),
+            prop_marr_demo = sum(heat2 == 'dem/lean dem' & marital == 'married')/ sum(marital == 'married'),
+            prop_other_demo = sum(heat2 == 'dem/lean dem' & marital == 'other')/ sum(marital == 'other'),
+            diff = prop_marr_demo-prop_other_demo)
+
+# so, by running this code, we can see our new dataframe 
+D1b       
+
+```
+
+Now, we need to multiply all values received in above dataframe by 100 to convert them to percentage and then we need to show the first 5 observations of these new variables.
+
+```{r}
+
+#creating new dataframe which gives summary results in percentage, as asked in the question
+Db <- D1 %>% 
+  group_by(state) %>%
+  summarise(per_dem = sum(heat2 == 'dem/lean dem')/ n() *100,
+            per_marr = sum(marital == 'married')/ n() *100,
+            per_marr_demo = sum(heat2 == 'dem/lean dem' & marital == 'married')/ sum(marital == 'married') *100,
+            per_other_demo = sum(heat2 == 'dem/lean dem' & marital == 'other')/ sum(marital == 'other') *100,
+            raw_marr_gap = (per_marr_demo-per_other_demo))
+
+# so, by running this code, we can see head of our new dataframe with these new variables, as asked in the question.
+head(Db)
+
+```
+
+
+###################
+
+Q.1.(c)
+
+Here, we need to consider the second data file (Q1Data2.csv) i.e. "dat2" dataframe as created in the beginning.
+
+```{r}
+
+# we need to Subset the data so that:
+# 1) we have all but three states, Hawaii, Alaska, and District of Columbia (Washington D.C), and
+# 2) our subset data shall have only two columns “state,” and “vote_Obama_pct” (Obama’s actual vote share).
+
+#so, we are using subset function for creating the required dataframe D2
+D2 <- subset(dat2, state != "Hawaii" & state != "Alaska" & state != "District of Columbia", select = c(state, vote_Obama_pct), stringsAsFactors = FALSE)
+
+# so now, by running this code, we can see the head of the data set "D2", as asked in the question
+head(D2)
+
+```
+
+
+Q.1.(d)
+
+Here we need to use a logistic regression predicting vote intention given state, using the indicator for being married as a predictor by setting up a proper link function.
+We need to check this for three different assumptions as to the state-level heterogeneity.
+
+#--- Assumption 1: No state-level heterogeneity. All states have the same intercept and slope.
+
+This means, it will be a complete pooling for state variable. So, we do not need to add state as a variable while making our model.
+Note: we are not using glmnet() lasso with very high lambda here because it will create coefficients of marital variable (x) also zero along with state variable. however, as we know that marital variable heterogeneity we still need to consider in the model, we will use glm() and that too with only marital as variable in this case.
+
+so here, we will consider "logit(p)= ln(p/1-p)= alpha+beta(x)" as our link function for binomial logistic regression,
+where, p can be understood as voting intention towards democratic candidate and x as the indicator for being married
+
+```{r}
+
+# Firstly, we need to update our reference category level, which will help us in interpreting our logistic model results as per variable terminology stated above
+# so, we are assigning "rep/lean rep" as reference level (or 0 level in other words) for voting intention variable column heat2
+D1 <- within(D1, heat2 <- relevel(heat2, ref = "rep/lean rep"))
+
+# and similarly, we are assigning "other" as reference level (or 0 level in other words) for marital status variable column marital
+D1 <- within(D1, marital <- relevel(marital, ref = "other"))
+
+#now, fitting the binomial logistic regression model to our data, as per Assumption-1
+F1 <- glm(heat2 ~ I(marital), data = D1, family = "binomial")
+
+#generating the summary of the coefficients for above logistic regression fit model F1
+summary(F1)$coef
+
+```
+
+From the summary results we can note that the estimate of the coefficient related to marital variable is about -0.73. This can be interpreted in the following way.
+As we increase one unit in x1 variable i.e. from 0 (other) to 1 (married), the log- odds of their vote intention leaning towards democratic candidate compared to leaning towards republican candidate, i.e. logit(p) or ln(p/1-p), decreases by 0.73.
+
+Also, alpha = 0.48 means at x = 0 (other than married people), p = e^0.48/(1 + e^0.48) = 0.62 (vote intention leaning towards democratic).
+Also, by plugging alpha and beta values at x = 1 (married) in our above link function, we get p=0.44 (vote intention leaning towards democratic).
+This suggests that As we increase one unit in x1 variable i.e. from 0 (other) to 1 (married), the probability of their vote intention leaning towards democratic candidate decreases from 0.62 to 0.44
+
+also, we can understand, beta = -0.73 suggests that that x and p has a negative relationship and makes p a monotonically decreasing function of x.
+Also, we can say that the logistic curve will center at x value of -alpha/beta = 0.657, and slope at center will be beta/4= -0.18,  which is also known as a divide by 4 rule, which gives degree of variation in p (democratic leaning) wrt unit change in x (marital status) at centre.
+
+
+#--- Assumption 2: Complete state-level heterogeneity. All states have completely independent intercepts and slopes. No outlying coefficient is penalized.
+
+This means, it will be a no-pooling model and we will add state also as a categorical predictor variable while making our model.
+so, our ink function will look like this: logit(p)= ln(p/1-p)= alpha + betas (marital as factors) + gammas(states as factor)
+
+```{r}
+
+library(glmnet)
+
+```
+
+
+```{r}
+
+#creating preditor and outcome variable datasets
+mm_predictor <- model.matrix(heat2 ~ marital + state, data = D1)
+mm_outcome = D1$heat2
+
+#now, in this case of no pooling, we will consider lambda=0 in our ridge method based binomial logistic regression model fitting to our data, as per Assumption-2, therefore, our model can be written as below
+F2 <- glmnet(x = mm_predictor, y = mm_outcome, alpha = 0, lambda = 0, family = "binomial")
+
+#generating the summary of the coefficients for above binomial logistic regression model fitting F2
+coef(F2)
+
+```
+
+so, by running above code we can see the estimation of the coefficients for above binomial logistic regression model fit F2 with no pooling
+
+
+#--- Assumption 3: State-level heterogeneity is unknown a priori. States have partially pooled intercepts and slopes. Outlying coefficients are penalized.
+
+This means, it will be a partial-pooling model and we will use Ridge regression model fit to penalise the coefficients.
+Here, although our link function will still look the same as used in previous case, logit(p)= ln(p/1-p)= alpha + betas (marital as factors) + gammas(states as factor), here we will penalise coefficients based on best Cross validated lambda value through ridge method of partial pooling
+
+```{r}
+
+#creating predictor and outcome variable datasets
+mm_predictor <- model.matrix(heat2 ~ marital + state, data = D1)
+mm_outcome = D1$heat2
+
+#finding the best lambda from cross-validation(CV) with ridge method in binomial logistic regression model
+cv_model_ridge <- cv.glmnet(x = mm_predictor, y = mm_outcome, alpha = 0, family = "binomial")
+best_lambda_ridge <- cv_model_ridge$lambda.min
+
+#now, fitting the binomial logistic regression model to our data with ridge method of partial pooling and with best CV lambda value, as per Assumption-3
+F3 <- glmnet(x = mm_predictor, y = mm_outcome, alpha = 0, lambda = best_lambda_ridge, family = "binomial")
+
+#generating the summary of the coefficients for the above generated model F3
+coef(F3)
+
+```
+
+so, by running above code we can see the estimation of the coefficients for above binomial logistic regression model fit F3 with partial pooling
+
+
+###################
+
+Q.1.(e)
+
+Now here, using the estimation result from the model with Assumption 3, we need to plot our inference for the predicted vote share by state, along with the actual vote intention, and also need to plot them vs. Obama’s actual vote share. And we will be annotating each dot with the corresponding state name.
+
+```{r}
+
+#loading some libraries necessary for plotting
+library(ggplot2)
+library(ggrepel)
+
+```
+
+
+```{r}
+
+#now, we can predict probability of y=1 (dem leaning) based on our existing dataset
+dem_prob <- predict(F3, s = best_lambda_ridge, newx = mm_predictor, type = "response")
+
+#assigning prediction to democratic or republic leaning based on criteria of probability value 0.5
+dem_rep_lean <- ifelse(dem_prob>0.5, "dem/lean dem", "rep/lean rep")
+
+#creating new dataframe covering this new predicted voting intention column, and our predictors column of marital and state 
+DP <- data.frame(s1 = dem_rep_lean, marital = D1$marital, state = D1$state)
+
+#now, creating new dataframe which gives us predicted democratic vote share by state
+pred_Db <- DP %>% 
+  group_by(state) %>%
+  summarise(pred_dem = sum(s1 == 'dem/lean dem')/ n() *100)
+
+#now, creating dataframe covering state-wise predicted vote share and actual vote intention
+
+EPD1 <- merge(x = pred_Db, y = Db[ , c("state", "per_dem")], by = "state", all.x=T)
+
+# and before merging data from D2 in above dataframe, we need to update state variable from capital to small letters
+D2$state <- tolower(D2$state)
+
+#now, we will add Obama’s actual vote share also in above dataframe EPD
+EPD <- merge(x = EPD1, y = D2, by = "state", all.x=T)
+
+#now, creating first plot of predicted vote share "pred_dem" vs Obama’s actual vote share "vote_Obama_pct". we have also added points for actual vote intention "per_dem" for better visualization. Also, we have annotated states for predicted vote share "pred_dem"
+EP1 <- ggplot(EPD, aes(x = vote_Obama_pct, y = pred_dem, per_dem)) + 
+  geom_point(aes(y = pred_dem, col = "pred_dem")) + 
+  geom_point(aes(y = per_dem, col = "per_dem")) +
+  geom_text_repel(aes(label = state), size = 2.5, max.overlaps = 100)
+EP1
+
+# similarly creating second plot of actual vote intention "per_dem" vs Obama’s actual vote share "vote_Obama_pct". we have also added points for predicted vote share "pred_dem" for better visualization. Also, we have annotated states for actual vote intention "per_dem"
+EP2 <- ggplot(EPD, aes(x = vote_Obama_pct, y = per_dem, pred_dem)) + 
+  geom_point(aes(y = pred_dem, col = "pred_dem")) + 
+  geom_point(aes(y = per_dem, col = "per_dem")) +
+  geom_text_repel(aes(label = state), size = 2.5, max.overlaps = 100)
+EP2
+
+```
+
+so, by running above code, we are getting the two necessary plots as asked in the question.
+
+##################
+
+Q.1.(f)
+
+As given in the question, The marriage gap is defined as the difference of Obama’s vote share among married and non-married people (“other”).
+Based on this definition, we will first find out the marriage gap from our estimation result from the model with Assumption 3.
+And then we will be plotting our inference for the predicted marriage gap, along with the raw marriage gaps from the data, vs. Obama’s actual vote share.
+
+
+```{r}
+
+#now, creating new dataframe which gives us predicted democratic vote share by marital status, and using that we are estimating the predicted marriage gap for each state. For this we are using the predicted vote intention (s1) from DP dataset which we created above based on ridge best lambda method as per assumption3
+pred_Db2 <- DP %>% 
+  group_by(state) %>%
+  summarise(pred_marr_demo = sum(s1 == 'dem/lean dem' & marital == 'married')/ sum(marital == 'married') *100,
+            pred_other_demo = sum(s1 == 'dem/lean dem' & marital == 'other')/ sum(marital == 'other') *100,
+            pred_marr_gap = (pred_marr_demo-pred_other_demo))
+
+#now, creating dataframe covering state-wise predicted marriage gap and raw marriage gap
+
+FPD1 <- merge(x = pred_Db2[ , c("state", "pred_marr_gap")], y = Db[ , c("state", "raw_marr_gap")], by = "state", all.x=T)
+
+# and before merging data from D2 in above dataframe, we need to update state variable from capital to small case letters
+D2$state <- tolower(D2$state)
+
+#now, we will add Obama’s actual vote share "vote_Obama_pct" also in above dataframe FPD
+FPD <- merge(x = FPD1, y = D2, by = "state", all.x=T)
+
+#now, creating first plot of predicted marriage gap "pred_marr_gap" vs Obama’s actual vote share "vote_Obama_pct". we have also added points for raw marriage gap "raw_marr_gap" for better visualization. Also, we have annotated states for predicted marriage gap "pred_marr_gap"
+FP1 <- ggplot(FPD, aes(x = vote_Obama_pct, y = pred_marr_gap, raw_marr_gap)) + 
+  geom_point(aes(y = pred_marr_gap, col = "pred_marr_gap")) + 
+  geom_point(aes(y = raw_marr_gap, col = "raw_marr_gap")) +
+  geom_text_repel(aes(label = state), size = 2.5, max.overlaps = 100)
+FP1
+
+# similarly creating second plot of raw marriage gap "raw_marr_gap" vs Obama’s actual vote share "vote_Obama_pct". we have also added points for predicted marriage gap "pred_marr_gap" for better visualization. Also, we have annotated states for raw marriage gap "raw_marr_gap"
+FP2 <- ggplot(FPD, aes(x = vote_Obama_pct, y = raw_marr_gap, pred_marr_gap)) + 
+  geom_point(aes(y = raw_marr_gap, col = "raw_marr_gap")) + 
+  geom_point(aes(y = pred_marr_gap, col = "pred_marr_gap")) +
+  geom_text_repel(aes(label = state), size = 2.5, max.overlaps = 100)
+FP2
+
+```
+
+so, by running above code, we are getting the two necessary plots as asked in the question.
+
+###################
+
+
+Q.1.(g)
+
+Here we need to repeat Q.1.(e) & Q.1.(f) for the model with Assumption 2, and discuss our result.
+
+# (i) repeat of Q.1.(e) for the model with Assumption 2
+
+so here, using the estimation result from the model with Assumption 2, we need to plot our inference for the predicted vote share by state, along with the actual vote intention, and also need to plot them vs. Obama’s actual vote share. And we will be annotating each dot with the corresponding state name.
+
+```{r}
+
+#now, we can predict probability of y=1 (dem leaning) based on our existing dataset
+dem_prob <- predict(F2, s = 0, newx = mm_predictor, type = "response")
+
+#assigning prediction to democratic or republic leaning based on criteria of probability value 0.5
+dem_rep_lean <- ifelse(dem_prob>0.5, "dem/lean dem", "rep/lean rep")
+
+#creating new dataframe covering this new predicted voting intention column, and our predictors column of marital and state 
+DP2 <- data.frame(s1 = dem_rep_lean, marital = D1$marital, state = D1$state)
+
+#now, creating new dataframe which gives us predicted democratic vote share by state
+pred_Db3 <- DP2 %>% 
+  group_by(state) %>%
+  summarise(pred_dem = sum(s1 == 'dem/lean dem')/ n() *100)
+
+#now, creating dataframe covering state-wise predicted vote share and actual vote intention
+
+GEPD1 <- merge(x = pred_Db3, y = Db[ , c("state", "per_dem")], by = "state", all.x=T)
+
+# and before merging data from D2 in above dataframe, we need to update state variable from capital to small letters
+D2$state <- tolower(D2$state)
+
+#now, we will add Obama’s actual vote share also in above dataframe GEPD
+GEPD <- merge(x = GEPD1, y = D2, by = "state", all.x=T)
+
+#now, creating first plot of predicted vote share "pred_dem" vs Obama’s actual vote share "vote_Obama_pct". we have also added points for actual vote intention "per_dem" for better visualization. Also, we have annotated states for predicted vote share "pred_dem"
+GEP1 <- ggplot(GEPD, aes(x = vote_Obama_pct, y = pred_dem, per_dem)) + 
+  geom_point(aes(y = pred_dem, col = "pred_dem")) + 
+  geom_point(aes(y = per_dem, col = "per_dem")) +
+  geom_text_repel(aes(label = state), size = 2.5, max.overlaps = 100)
+GEP1
+
+# similarly creating second plot of actual vote intention "per_dem" vs Obama’s actual vote share "vote_Obama_pct". we have also added points for predicted vote share "pred_dem" for better visualization. Also, we have annotated states for actual vote intention "per_dem"
+GEP2 <- ggplot(GEPD, aes(x = vote_Obama_pct, y = per_dem, pred_dem)) + 
+  geom_point(aes(y = pred_dem, col = "pred_dem")) + 
+  geom_point(aes(y = per_dem, col = "per_dem")) +
+  geom_text_repel(aes(label = state), size = 2.5, max.overlaps = 100)
+GEP2
+
+```
+
+so, by running above code, we are getting the two necessary plots as asked in the question.
+
+Also, from our these plot results, we can observe that in most of the states, our predicted democratic vote share is lesser but near to actual democratic vote intention. However, as actual vote share deviates from mean, the gap of predicted democratic vote share widens largely from the actual vote intention as our model predicts strongly towards or against the democratic at the extreme values of obama vote percents.
+Moreover, we can observe that compared to partial pooling based predicted democratic vote share, in this no pooling based model, we have higher gap between our predicted democratic vote share data and actual democratic intention data, suggesting higher prediction error. This suggests partial pooling model (assumption-3) has better predictive power compared to no pooling based model(assumption-2).
+
+# (ii) repeat of Q.1.(f) for the model with Assumption 2
+
+As given in the question, The marriage gap is defined as the difference of Obama’s vote share among married and non-married people (“other”).
+Based on this definition, we will first find out the marriage gap from our estimation result from the model with Assumption 2.
+And then we will be plotting our inference for the predicted marriage gap, along with the raw marriage gaps from the data, vs. Obama’s actual vote share.
+
+
+```{r}
+
+#now, creating new dataframe which gives us predicted democratic vote share by marital status, and using that we are estimating the predicted marriage gap for each state. For this we are using the predicted vote intention (s1) from DP2 dataset which we generated above based on our model with assumption2
+pred_Db4 <- DP2 %>% 
+  group_by(state) %>%
+  summarise(pred_marr_demo = sum(s1 == 'dem/lean dem' & marital == 'married')/ sum(marital == 'married') *100,
+            pred_other_demo = sum(s1 == 'dem/lean dem' & marital == 'other')/ sum(marital == 'other') *100,
+            pred_marr_gap = (pred_marr_demo-pred_other_demo))
+
+#now, creating dataframe covering state-wise predicted marriage gap and raw marriage gap
+
+GFPD1 <- merge(x = pred_Db4[ , c("state", "pred_marr_gap")], y = Db[ , c("state", "raw_marr_gap")], by = "state", all.x=T)
+
+# and before merging data from D2 in above dataframe, we need to update state variable from capital to small case letters
+D2$state <- tolower(D2$state)
+
+#now, we will add Obama’s actual vote share "vote_Obama_pct" also in above dataframe FPD
+GFPD <- merge(x = GFPD1, y = D2, by = "state", all.x=T)
+
+#now, creating first plot of predicted marriage gap "pred_marr_gap" vs Obama’s actual vote share "vote_Obama_pct". we have also added points for raw marriage gap "raw_marr_gap" for better visualization. Also, we have annotated states for predicted marriage gap "pred_marr_gap"
+GFP1 <- ggplot(GFPD, aes(x = vote_Obama_pct, y = pred_marr_gap, raw_marr_gap)) + 
+  geom_point(aes(y = pred_marr_gap, col = "pred_marr_gap")) + 
+  geom_point(aes(y = raw_marr_gap, col = "raw_marr_gap")) +
+  geom_text_repel(aes(label = state), size = 2.5, max.overlaps = 100)
+GFP1
+
+# similarly creating second plot of raw marriage gap "raw_marr_gap" vs Obama’s actual vote share "vote_Obama_pct". we have also added points for predicted marriage gap "pred_marr_gap" for better visualization. Also, we have annotated states for raw marriage gap "raw_marr_gap"
+GFP2 <- ggplot(GFPD, aes(x = vote_Obama_pct, y = raw_marr_gap, pred_marr_gap)) + 
+  geom_point(aes(y = raw_marr_gap, col = "raw_marr_gap")) + 
+  geom_point(aes(y = pred_marr_gap, col = "pred_marr_gap")) +
+  geom_text_repel(aes(label = state), size = 2.5, max.overlaps = 100)
+GFP2
+
+```
+
+so, by running above code, we are getting the two necessary plots as asked in the question.
+
+Also, from our these plot results, we can observe that in most of the states, our predicted marriage gap is negative and near to -100, meaning that in most of the states un-married (other) people are highly democratic leaning, whereas married people are mostly republican leaning.
+Moreover, we can observe that compared to partial pooling based predicted marriage gap, in this no pooling based model, our predicted marriage gap data has much lower values compared to raw marriage gap data, suggesting higher prediction error. This suggests partial pooling model (assumption-3) has better predictive power compared to no pooling based model(assumption-2).
+
+
+###########################  END  #####################################
